@@ -411,6 +411,42 @@ int help_sleep(int argc, char **argv)
 	return 1;
 }
 
+int help_test(int argc, char **argv)
+{
+	esc_prn("\n{Htest} [{Uarg1}] [{Uarg2}] ...\n"
+		"  Execute a test command with optional arguments.\n"
+		"  This is a demonstration command that shows how to add new commands to VPCS.\n"
+		"  The command will display all arguments passed to it.\n");
+
+	return 1;
+}
+
+int help_server(int argc, char **argv)
+{
+	esc_prn("\n{Htest} [{Uarg1}] [{Uarg2}] ...\n"
+		"  Execute a server deamon\n"
+		"  Runs a simple http server\n");
+
+	return 1;
+}
+
+int help_httpd(int argc, char **argv)
+{
+	esc_prn("\n{Hhttpd} {Ucommand} [{Uoptions}]\n"
+		"  Control HTTP server daemon\n"
+		"  Commands:\n"
+		"    {Hstart} [{Uport}] [{Udocroot}]  Start HTTP server (default port 8080)\n"
+		"    {Hstop}                      Stop HTTP server\n"
+		"    {Hstatus}                    Show server status\n"
+		"    {Hheaders} {Hon}|{Hoff}         Enable/disable header echo mode\n"
+		"  Examples:\n"
+		"    {Hhttpd start}               Start server on port 8080\n"
+		"    {Hhttpd start 9000}          Start server on port 9000\n"
+		"    {Hhttpd headers on}          Echo client headers back\n");
+
+	return 1;
+}
+
 int help_help(int argc, char **argv)
 {
 	esc_prn("\n{H%s}, Print help. Use {UCOMMAND} {H?} or "

@@ -45,6 +45,9 @@ int help_set(int argc, char **argv);
 int help_show(int argc, char **argv);
 int help_shut(int argc, char **argv);
 int help_sleep(int argc, char **argv);
+int help_test(int argc, char **argv);
+int help_server(int argc, char **argv);
+int help_httpd(int argc, char **argv);
 int help_version(int argc, char **argv);
 int help_write(int argc, char **argv);
 

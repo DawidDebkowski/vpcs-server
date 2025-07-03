@@ -1,3 +1,4 @@
 *.o
 *.hist
 vpcs
+.vscode

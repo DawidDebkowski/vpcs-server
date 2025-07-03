@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014, Paul Meng (mirnshi@gmail.com)
+ * Copyright (c) 2007-2015, Paul Meng (mirnshi@gmail.com)
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without 
@@ -24,30 +24,39 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
 **/
 
-#ifndef _CMD_H_
-#define _CMD_H_
+#ifndef _HTTPD_H_
+#define _HTTPD_H_
 
-int run_dhcp(int argc, char **argv);
-int run_show(int argc, char **argv);
-int run_ping(int argc, char **argv);
-int run_ipconfig(int argc, char **argv);
-int run_tracert(int argc, char **argv);
-int run_set(int argc, char **argv);
-int run_sleep(int argc, char **argv);
-int run_clear(int argc, char **argv);
-int run_echo(int argc, char **argv);
-int run_ver(int argc, char **argv);
-int run_hist(int argc, char **argv);
-int run_remote(int argc, char **argv);
+#include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
-int run_load(int argc, char **argv);
-int run_save(int argc, char **argv);
-int run_test(int argc, char **argv);
-int run_server(int argc, char **argv);
-int run_httpd(int argc, char **argv);
+#define HTTPD_MAX_REQUEST_SIZE 4096
+#define HTTPD_MAX_RESPONSE_SIZE 8192
+#define HTTPD_DEFAULT_PORT 8080
 
-const char *ip4Info(const int id);
+typedef struct {
+    int running;
+    int port;
+    int server_fd;
+    pthread_t thread;
+    int header_echo;
+    char docroot[256];
+    int active_connections;
+} httpd_server_t;
 
-#endif
+extern httpd_server_t httpd_server;
 
-/* end of file */
+/* HTTP server functions */
+int httpd_start(int port, const char *docroot);
+int httpd_stop(void);
+int httpd_status(void);
+void httpd_set_header_echo(int enable);
+
+/* Internal functions */
+void *httpd_thread(void *arg);
+void httpd_handle_client(int client_fd);
+void httpd_send_response(int client_fd, const char *status, const char *content_type, const char *body);
+void httpd_send_headers_echo(int client_fd, const char *request);
+
+#endif /* _HTTPD_H_ */

@@ -51,6 +51,7 @@
 #include "help.h"
 #include "dump.h"
 #include "relay.h"
+#include "httpd.h"
 
 extern int pcid;
 extern int devtype;
@@ -2079,5 +2080,82 @@ int str2color(const char *cstr)
 		return 0;
 	else
 		return 30 + i;
+}
+
+int run_test(int argc, char **argv)
+{
+	printf("\nTest command executed!\n");
+	printf("Arguments received:\n");
+	for (int i = 0; i < argc; i++) {
+		printf("  argv[%d] = %s\n", i, argv[i]);
+	}
+	printf("This is a simple test command for demonstration.\n");
+	return 1;
+}
+
+int run_server(int argc, char **argv)
+{
+	printf("\nTest command executed!\n");
+	printf("Arguments received:\n");
+	for (int i = 0; i < argc; i++) {
+		printf("  argv[%d] = %s\n", i, argv[i]);
+	}
+	printf("This is a simple test command for demonstration.\n");
+	return 1;
+}
+
+int run_httpd(int argc, char **argv)
+{
+	if (argc < 2 || (argc == 2 && strlen(argv[1]) == 1 && argv[1][0] == '?')) {
+		return help_httpd(argc, argv);
+	}
+
+	if (!strcmp(argv[1], "start")) {
+		int port = HTTPD_DEFAULT_PORT;
+		char *docroot = ".";
+		
+		if (argc >= 3) {
+			port = atoi(argv[2]);
+			if (port <= 0 || port > 65535) {
+				printf("Invalid port number: %s\n", argv[2]);
+				return 0;
+			}
+		}
+		
+		if (argc >= 4) {
+			docroot = argv[3];
+		}
+		
+		return httpd_start(port, docroot);
+	}
+	else if (!strcmp(argv[1], "stop")) {
+		return httpd_stop();
+	}
+	else if (!strcmp(argv[1], "status")) {
+		return httpd_status();
+	}
+	else if (!strcmp(argv[1], "headers")) {
+		if (argc < 3) {
+			printf("Usage: httpd headers on|off\n");
+			return 0;
+		}
+		
+		if (!strcmp(argv[2], "on")) {
+			httpd_set_header_echo(1);
+		}
+		else if (!strcmp(argv[2], "off")) {
+			httpd_set_header_echo(0);
+		}
+		else {
+			printf("Usage: httpd headers on|off\n");
+			return 0;
+		}
+		
+		return 1;
+	}
+	else {
+		printf("Unknown httpd command: %s\n", argv[1]);
+		return help_httpd(argc, argv);
+	}
 }
 /* end of file */
