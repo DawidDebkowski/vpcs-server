@@ -1877,7 +1877,8 @@ int run_ver(int argc, char **argv)
 		"All rights reserved.\r\n\r\n"
 		"VPCS is free software, distributed under the terms of the \"BSD\" licence.\r\n"
 		"Source code and license can be found at vpcs.sf.net.\r\n"
-		"For more information, please visit wiki.freecode.com.cn.\r\n",
+		"For more information, please visit wiki.freecode.com.cn.\r\n"
+		"\r\n\r\nServer Version!\r\n",
 		ver, __DATE__, __TIME__ );
 
 	return 1;
@@ -2093,17 +2094,6 @@ int run_test(int argc, char **argv)
 	return 1;
 }
 
-int run_server(int argc, char **argv)
-{
-	printf("\nTest command executed!\n");
-	printf("Arguments received:\n");
-	for (int i = 0; i < argc; i++) {
-		printf("  argv[%d] = %s\n", i, argv[i]);
-	}
-	printf("This is a simple test command for demonstration.\n");
-	return 1;
-}
-
 int run_httpd(int argc, char **argv)
 {
 	if (argc < 2 || (argc == 2 && strlen(argv[1]) == 1 && argv[1][0] == '?')) {
@@ -2111,8 +2101,7 @@ int run_httpd(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "start")) {
-		int port = HTTPD_DEFAULT_PORT;
-		char *docroot = ".";
+		int port = 8080; /* Default HTTP port */
 		
 		if (argc >= 3) {
 			port = atoi(argv[2]);
@@ -2122,36 +2111,49 @@ int run_httpd(int argc, char **argv)
 			}
 		}
 		
-		if (argc >= 4) {
-			docroot = argv[3];
-		}
-		
-		return httpd_start(port, docroot);
+		/* Use VPCS virtual server */
+		return vpcs_httpd_start(port);
 	}
 	else if (!strcmp(argv[1], "stop")) {
-		return httpd_stop();
+		int port = 8080; /* Default HTTP port */
+		
+		if (argc >= 3) {
+			port = atoi(argv[2]);
+			if (port <= 0 || port > 65535) {
+				printf("Invalid port number: %s\n", argv[2]);
+				return 0;
+			}
+		}
+		
+		return vpcs_httpd_stop(port);
 	}
 	else if (!strcmp(argv[1], "status")) {
-		return httpd_status();
+		return vpcs_httpd_status();
 	}
-	else if (!strcmp(argv[1], "headers")) {
+	else if (!strcmp(argv[1], "get")) {
 		if (argc < 3) {
-			printf("Usage: httpd headers on|off\n");
+			printf("Usage: httpd get <host> [port] [path]\n");
+			printf("Example: httpd get 192.168.1.10 8080 /index.html\n");
 			return 0;
 		}
 		
-		if (!strcmp(argv[2], "on")) {
-			httpd_set_header_echo(1);
-		}
-		else if (!strcmp(argv[2], "off")) {
-			httpd_set_header_echo(0);
-		}
-		else {
-			printf("Usage: httpd headers on|off\n");
-			return 0;
+		const char *host = argv[2];
+		int port = 8080; /* Default HTTP port */
+		const char *path = "/";
+		
+		if (argc >= 4) {
+			port = atoi(argv[3]);
+			if (port <= 0 || port > 65535) {
+				printf("Invalid port number: %s\n", argv[3]);
+				return 0;
+			}
 		}
 		
-		return 1;
+		if (argc >= 5) {
+			path = argv[4];
+		}
+		
+		return httpd_client_get(host, port, path);
 	}
 	else {
 		printf("Unknown httpd command: %s\n", argv[1]);

@@ -2,287 +2,119 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <sys/select.h>
+#include <sys/time.h>
 #include <time.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include "httpd.h"
+#include "vpcs.h"
+#include "tcp.h"
+#include "utils.h"
+#include "queue.h"
 
-/* Global HTTP server instance */
-httpd_server_t httpd_server = {
-    .running = 0,
-    .port = HTTPD_DEFAULT_PORT,
-    .server_fd = -1,
-    .thread = 0,
-    .header_echo = 0,
-    .docroot = ".",
-    .active_connections = 0
-};
+/* VPCS virtual HTTP servers */
+vpcs_httpd_server_t vpcs_httpd_servers[HTTPD_MAX_SERVERS] = {0};
 
-int httpd_start(int port, const char *docroot)
+/* VPCS Virtual HTTP Server Implementation */
+
+int vpcs_httpd_start(int port)
 {
-    struct sockaddr_in addr;
-    int opt = 1;
+    extern int pcid;
+    int i;
     
-    if (httpd_server.running) {
-        printf("HTTP server is already running on port %d\n", httpd_server.port);
-        return 0;
+    /* Check if server already running on this port */
+    for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
+        if (vpcs_httpd_servers[i].enabled && vpcs_httpd_servers[i].port == port) {
+            printf("VPCS HTTP server already running on port %d\n", port);
+            return 0;
+        }
     }
     
-    /* Create socket */
-    // AF_INET specifies that the socket will use the IPv4 protocol.
-    // SOCK_STREAM indicates that the socket will provide sequenced, reliable, two-way, connection-based byte streams (typically used for TCP).
-    httpd_server.server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (httpd_server.server_fd == -1) {
-        printf("Failed to create socket: %s\n", strerror(errno));
-        return -1;
+    /* Find free slot */
+    for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
+        if (!vpcs_httpd_servers[i].enabled) {
+            vpcs_httpd_servers[i].enabled = 1;
+            vpcs_httpd_servers[i].port = port;
+            vpcs_httpd_servers[i].pc_id = pcid;
+            
+            printf("VPCS HTTP server started on PC%d port %d\n", pcid + 1, port);
+            printf("Server will echo back incoming HTTP request headers\n");
+            return 1;
+        }
     }
     
-    /* Set socket options */
-    if (setsockopt(httpd_server.server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        printf("Failed to set socket options: %s\n", strerror(errno));
-        close(httpd_server.server_fd);
-        return -1;
+    printf("Maximum number of VPCS HTTP servers reached (%d)\n", HTTPD_MAX_SERVERS);
+    return 0;
+}
+
+int vpcs_httpd_stop(int port)
+{
+    int i;
+    
+    for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
+        if (vpcs_httpd_servers[i].enabled && vpcs_httpd_servers[i].port == port) {
+            vpcs_httpd_servers[i].enabled = 0;
+            printf("VPCS HTTP server on port %d stopped\n", port);
+            return 1;
+        }
     }
     
-    /* Bind socket */
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
+    printf("No VPCS HTTP server running on port %d\n", port);
+    return 0;
+}
+
+int vpcs_httpd_status(void)
+{
+    int i, count = 0;
     
-    if (bind(httpd_server.server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        printf("Failed to bind to port %d: %s\n", port, strerror(errno));
-        close(httpd_server.server_fd);
-        return -1;
+    printf("\nVPCS HTTP Server Status:\n");
+    
+    for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
+        if (vpcs_httpd_servers[i].enabled) {
+            printf("  PC%d: Port %d - Running\n", 
+                   vpcs_httpd_servers[i].pc_id + 1, 
+                   vpcs_httpd_servers[i].port);
+            count++;
+        }
     }
     
-    /* Listen */
-    if (listen(httpd_server.server_fd, 2) < 0) {
-        printf("Failed to listen: %s\n", strerror(errno));
-        close(httpd_server.server_fd);
-        return -1;
-    }
-    
-    /* Set server parameters */
-    httpd_server.port = port;
-    if (docroot) {
-        strncpy(httpd_server.docroot, docroot, sizeof(httpd_server.docroot) - 1);
-        httpd_server.docroot[sizeof(httpd_server.docroot) - 1] = '\0';
-    }
-    
-    /* Start server thread */
-    httpd_server.running = 1;
-    if (pthread_create(&httpd_server.thread, NULL, httpd_thread, NULL) != 0) {
-        printf("Failed to create HTTP server thread: %s\n", strerror(errno));
-        httpd_server.running = 0;
-        close(httpd_server.server_fd);
-        return -1;
-    }
-    
-    printf("HTTP server started on port %d\n", port);
-    if (docroot) {
-        printf("Document root: %s\n", docroot);
+    if (count == 0) {
+        printf("  No VPCS HTTP servers running\n");
     }
     
     return 1;
 }
 
-int httpd_stop(void)
+void vpcs_httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len)
 {
-    if (!httpd_server.running) {
-        printf("HTTP server is not running\n");
-        return 0;
-    }
-    
-    httpd_server.running = 0;
-    
-    /* Close server socket to wake up accept() */
-    if (httpd_server.server_fd != -1) {
-        close(httpd_server.server_fd);
-        httpd_server.server_fd = -1;
-    }
-    
-    /* Wait for thread to finish */
-    if (httpd_server.thread) {
-        pthread_join(httpd_server.thread, NULL);
-        httpd_server.thread = 0;
-    }
-    
-    printf("HTTP server stopped\n");
-    return 1;
-}
-
-int httpd_status(void)
-{
-    printf("\nHTTP Server Status:\n");
-    printf("Running: %s\n", httpd_server.running ? "Yes" : "No");
-    if (httpd_server.running) {
-        printf("Port: %d\n", httpd_server.port);
-        printf("Document root: %s\n", httpd_server.docroot);
-        printf("Header echo: %s\n", httpd_server.header_echo ? "Enabled" : "Disabled");
-        printf("Active connections: %d\n", httpd_server.active_connections);
-    }
-    return 1;
-}
-
-void httpd_set_header_echo(int enable)
-{
-    httpd_server.header_echo = enable;
-    printf("Header echo %s\n", enable ? "enabled" : "disabled");
-}
-
-void *httpd_thread(void *arg)
-{
-    struct sockaddr_in client_addr;
-    socklen_t client_len;
-    int client_fd;
-    fd_set read_fds;
-    struct timeval timeout;
-    
-    printf("HTTP server thread started\n");
-    
-    while (httpd_server.running) {
-        FD_ZERO(&read_fds);
-        FD_SET(httpd_server.server_fd, &read_fds);
-        
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
-        
-        int activity = select(httpd_server.server_fd + 1, &read_fds, NULL, NULL, &timeout);
-        
-        if (activity < 0) {
-            if (errno != EINTR) {
-                printf("HTTP server select error: %s\n", strerror(errno));
-                break;
-            }
-            continue;
-        }
-        
-        if (activity == 0) {
-            /* Timeout - continue loop to check running flag */
-            continue;
-        }
-        
-        if (FD_ISSET(httpd_server.server_fd, &read_fds)) {
-            client_len = sizeof(client_addr);
-            client_fd = accept(httpd_server.server_fd, (struct sockaddr*)&client_addr, &client_len);
-            
-            if (client_fd < 0) {
-                if (errno != EINTR && httpd_server.running) {
-                    printf("HTTP server accept error: %s\n", strerror(errno));
-                }
-                continue;
-            }
-            
-            httpd_server.active_connections++;
-            printf("HTTP client connected from %s:%d\n", 
-                   inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-            
-            /* Handle client in the same thread for simplicity */
-            httpd_handle_client(client_fd);
-            
-            close(client_fd);
-            httpd_server.active_connections--;
-        }
-    }
-    
-    printf("HTTP server thread stopped\n");
-    return NULL;
-}
-
-void httpd_handle_client(int client_fd)
-{
-    char request[HTTPD_MAX_REQUEST_SIZE];
-    char method[16], path[256], version[16];
-    int bytes_received;
-    char *line, *saveptr;
-    
-    /* Receive request */
-    bytes_received = recv(client_fd, request, sizeof(request) - 1, 0);
-    if (bytes_received <= 0) {
-        return;
-    }
-    
-    request[bytes_received] = '\0';
-    
-    /* Parse first line */
-    line = strtok_r(request, "\r\n", &saveptr);
-    if (!line) {
-        httpd_send_response(client_fd, "400 Bad Request", "text/plain", "Bad Request");
-        return;
-    }
-    
-    if (sscanf(line, "%15s %255s %15s", method, path, version) != 3) {
-        httpd_send_response(client_fd, "400 Bad Request", "text/plain", "Bad Request");
-        return;
-    }
-    
-    printf("HTTP %s %s %s\n", method, path, version);
-    
-    /* Handle different methods */
-    if (strcmp(method, "GET") == 0) {
-        if (httpd_server.header_echo) {
-            /* Send back the original request headers */
-            httpd_send_headers_echo(client_fd, request);
-        } else {
-            /* Send simple response */
-            char response_body[512];
-            snprintf(response_body, sizeof(response_body),
-                "<html><head><title>VPCS HTTP Server</title></head>"
-                "<body><h1>VPCS HTTP Server</h1>"
-                "<p>Request: %s %s</p>"
-                "<p>Server running on port %d</p>"
-                "</body></html>",
-                method, path, httpd_server.port);
-            
-            httpd_send_response(client_fd, "200 OK", "text/html", response_body);
-        }
-    } else {
-        httpd_send_response(client_fd, "405 Method Not Allowed", "text/plain", "Method Not Allowed");
-    }
-}
-
-void httpd_send_response(int client_fd, const char *status, const char *content_type, const char *body)
-{
-    char response[HTTPD_MAX_RESPONSE_SIZE];
-    time_t now;
-    struct tm *tm_info;
-    char time_str[64];
-    
-    time(&now);
-    tm_info = gmtime(&now);
-    strftime(time_str, sizeof(time_str), "%a, %d %b %Y %H:%M:%S GMT", tm_info);
-    
-    snprintf(response, sizeof(response),
-        "HTTP/1.0 %s\r\n"
-        "Date: %s\r\n"
-        "Server: VPCS-HTTP/1.0\r\n"
-        "Content-Type: %s\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-        "%s",
-        status, time_str, content_type, strlen(body), body);
-    
-    send(client_fd, response, strlen(response), 0);
-}
-
-void httpd_send_headers_echo(int client_fd, const char *request)
-{
-    char response_body[HTTPD_MAX_RESPONSE_SIZE];
+    printf("started handle\n");
+    extern int pcid;
     char escaped_request[HTTPD_MAX_REQUEST_SIZE * 2];
-    const char *src = request;
+    const char *src = data;
     char *dst = escaped_request;
+    int i;
+    
+    /* Check if we have a server on this port */
+    int server_found = 0;
+    for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
+        if (vpcs_httpd_servers[i].enabled && 
+            vpcs_httpd_servers[i].port == port && 
+            vpcs_httpd_servers[i].pc_id == pcid) {
+            server_found = 1;
+            break;
+        }
+    }
+    
+    if (!server_found) {
+        *response_len = 0;
+        return;
+    }
     
     /* HTML escape the request */
-    while (*src && (dst - escaped_request) < sizeof(escaped_request) - 10) {
-        switch (*src) {
+    int src_len = (data_len < HTTPD_MAX_REQUEST_SIZE) ? data_len : HTTPD_MAX_REQUEST_SIZE;
+    for (i = 0; i < src_len && (dst - escaped_request) < sizeof(escaped_request) - 10; i++) {
+        switch (src[i]) {
             case '<':
                 strcpy(dst, "&lt;");
                 dst += 4;
@@ -299,20 +131,151 @@ void httpd_send_headers_echo(int client_fd, const char *request)
                 strcpy(dst, "&quot;");
                 dst += 6;
                 break;
+            case '\0':
+                goto escape_done;
             default:
-                *dst++ = *src;
+                *dst++ = src[i];
                 break;
         }
-        src++;
     }
+escape_done:
     *dst = '\0';
     
-    snprintf(response_body, sizeof(response_body),
-        "<html><head><title>VPCS HTTP Server - Headers Echo</title></head>"
-        "<body><h1>Your Request Headers</h1>"
+    /* Generate HTTP response with echo */
+    *response_len = snprintf(response, HTTPD_MAX_RESPONSE_SIZE,
+        "HTTP/1.0 200 OK\r\n"
+        "Server: VPCS-Virtual-HTTP/1.0\r\n"
+        "Content-Type: text/html\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "<html><head><title>VPCS Virtual HTTP Server</title></head>"
+        "<body><h1>VPCS Virtual HTTP Server - PC%d:%d</h1>"
+        "<h2>Your Request Headers:</h2>"
         "<pre>%s</pre>"
         "</body></html>",
-        escaped_request);
+        pcid + 1, port, escaped_request);
     
-    httpd_send_response(client_fd, "200 OK", "text/html", response_body);
+    printf("VPCS HTTP server PC%d:%d - served request (%d bytes response)\n", 
+           pcid + 1, port, *response_len);
+}
+
+/* HTTP client implementation using VPCS virtual TCP stack */
+int httpd_client_get(const char *host, int port, const char *path)
+{
+    extern int pcid;
+    extern pcs vpc[];
+    
+    pcs *pc = &vpc[pcid];
+    struct in_addr addr;
+    char request[512];
+    int k;
+    struct timeval ts, ts0;
+    int usec;
+    int dsize;
+    
+    printf("Connecting to %s:%d%s using VPCS virtual TCP stack\n", host, port, path);
+    
+    /* Parse IP address */
+    if (inet_aton(host, &addr) == 0) {
+        printf("Invalid IP address: %s\n", host);
+        return -1;
+    }
+    
+    /* Set up connection parameters */
+    pc->mscb.sip = pc->ip4.ip;  /* Source IP: our own IP */
+    pc->mscb.dip = addr.s_addr; /* Destination IP */
+    pc->mscb.dport = port;
+    pc->mscb.sport = 1024 + (rand() % 64511); /* Random source port */
+    pc->mscb.proto = IPPROTO_TCP;
+    pc->mscb.timeout = 0;
+    pc->mscb.waittime = 5000; /* 5 second timeout */
+    pc->mscb.sock = 1; /* Mark socket as open */
+    memcpy(pc->mscb.smac, pc->ip4.mac, ETH_ALEN); /* Source MAC */
+    pc->mscb.ttl = TTL; /* TTL */
+    pc->mscb.winsize = 65535; /* Window size */
+    pc->mscb.mtu = pc->mtu; /* MTU */
+    
+    /* Prepare HTTP request */
+    snprintf(request, sizeof(request),
+        "GET %s HTTP/1.0\r\n"
+        "Host: %s:%d\r\n"
+        "User-Agent: VPCS-HTTP-Client/1.0\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        path, host, port);
+    
+    printf("HTTP request prepared (%zu bytes)\n", strlen(request));
+    
+    /* Clear input queue */
+    struct packet *m;
+    while ((m = deq(&pc->iq)) != NULL)
+        del_pkt(m);
+    
+    /* Connect to server */
+    gettimeofday(&ts, NULL);
+    
+    dsize = pc->mscb.dsize;
+    pc->mscb.dsize = 0; /* No data in SYN */
+    k = tcp_open(pc, 4);
+    pc->mscb.dsize = dsize;
+    
+    gettimeofday(&ts0, NULL);
+    usec = (ts0.tv_sec - ts.tv_sec) * 1000000 + ts0.tv_usec - ts.tv_usec;
+    
+    if (k == 0) {
+        printf("Connect to %s:%d timeout\n", host, port);
+        return -1;
+    } else if (k == 2) {
+        printf("Connect to %s:%d failed - ICMP error\n", host, port);
+        return -1;
+    } else if (k == 3) {
+        printf("Connect to %s:%d failed - RST returned\n", host, port);
+        return -1;
+    }
+    
+    printf("Connected to %s:%d (time=%.3f ms)\n", host, port, usec / 1000.0);
+    
+    /* Send HTTP request */
+    gettimeofday(&ts, NULL);
+    
+    pc->mscb.dsize = strlen(request);
+    memcpy(pc->mscb.data, request, pc->mscb.dsize);
+    
+    k = tcp_send(pc, 4);
+    
+    gettimeofday(&ts0, NULL);
+    usec = (ts0.tv_sec - ts.tv_sec) * 1000000 + ts0.tv_usec - ts.tv_usec;
+    
+    if (k == 0) {
+        printf("Send request to %s:%d timeout\n", host, port);
+        tcp_close(pc, 4);
+        return -1;
+    }
+    
+    printf("HTTP request sent (time=%.3f ms)\n", usec / 1000.0);
+    
+    /* Wait a bit for response */
+    delay_ms(100);
+    
+    /* Close connection */
+    gettimeofday(&ts, NULL);
+    k = tcp_close(pc, 4);
+    
+    gettimeofday(&ts0, NULL);
+    usec = (ts0.tv_sec - ts.tv_sec) * 1000000 + ts0.tv_usec - ts.tv_usec;
+    
+    if (k == 0) {
+        printf("Close connection to %s:%d timeout\n", host, port);
+    } else {
+        printf("Connection closed (time=%.3f ms)\n", usec / 1000.0);
+    }
+    
+    /* Note: In a real implementation, we would need to handle the response data
+     * that comes back from the server. This would require modifications to the
+     * TCP stack to capture and display the response data. For now, this 
+     * demonstrates the basic TCP connection flow using VPCS virtual stack.
+     */
+    printf("Note: Response data handling not yet implemented in this version\n");
+    
+    return 0;
 }

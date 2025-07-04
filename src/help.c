@@ -433,16 +433,23 @@ int help_server(int argc, char **argv)
 int help_httpd(int argc, char **argv)
 {
 	esc_prn("\n{Hhttpd} {Ucommand} [{Uoptions}]\n"
-		"  Control HTTP server daemon\n"
-		"  Commands:\n"
-		"    {Hstart} [{Uport}] [{Udocroot}]  Start HTTP server (default port 8080)\n"
-		"    {Hstop}                      Stop HTTP server\n"
+		"  Control VPCS virtual HTTP server and HTTP client\n"
+		"  Server Commands:\n"
+		"    {Hstart} [{Uport}]           Start VPCS virtual HTTP server (default port 8080)\n"
+		"    {Hstop} [{Uport}]            Stop VPCS virtual HTTP server\n"
 		"    {Hstatus}                    Show server status\n"
-		"    {Hheaders} {Hon}|{Hoff}         Enable/disable header echo mode\n"
+		"  Client Commands:\n"
+		"    {Hget} {Uhost} [{Uport}] [{Upath}]  Make HTTP GET request using VPCS stack\n"
 		"  Examples:\n"
-		"    {Hhttpd start}               Start server on port 8080\n"
-		"    {Hhttpd start 9000}          Start server on port 9000\n"
-		"    {Hhttpd headers on}          Echo client headers back\n");
+		"    {Hhttpd start}               Start virtual server on port 8080\n"
+		"    {Hhttpd start 9000}          Start virtual server on port 9000\n"
+		"    {Hhttpd stop 9000}           Stop virtual server on port 9000\n"
+		"    {Hhttpd get 192.168.1.10}    GET request to 192.168.1.10:8080/\n"
+		"    {Hhttpd get 192.168.1.10 9000 /test}  GET request to 192.168.1.10:9000/test\n"
+		"  Notes:\n"
+		"    - Virtual server echoes back HTTP request headers\n"
+		"    - Works with VPCS virtual TCP stack (not system sockets)\n"
+		"    - Suitable for GNS3 network simulations\n");
 
 	return 1;
 }

@@ -43,7 +43,6 @@ int run_remote(int argc, char **argv);
 int run_load(int argc, char **argv);
 int run_save(int argc, char **argv);
 int run_test(int argc, char **argv);
-int run_server(int argc, char **argv);
 int run_httpd(int argc, char **argv);
 
 const char *ip4Info(const int id);

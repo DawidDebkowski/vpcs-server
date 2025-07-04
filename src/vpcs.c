@@ -140,7 +140,6 @@ static cmdStub cmd_entry[] = {
 	{"set",		NULL,	run_set,	help_set},
 	{"show",	NULL,	run_show,	help_show},
 	{"test",	NULL,	run_test,	help_test},
-	{"server",	NULL,	run_server,	help_server},
 	{"httpd",	NULL,	run_httpd,	help_httpd},
 	{"version",	NULL,	run_ver,	NULL},
 	{"sleep",	NULL,	run_sleep,	help_sleep},
@@ -659,11 +658,6 @@ void
 sig_clean(int sig)
 {
 	int i;
-	
-	/* Stop HTTP server if running */
-	if (httpd_server.running) {
-		httpd_stop();
-	}
 	
 	for (i = 0; i < num_pths; i++)
 		close(vpc[i].fd);

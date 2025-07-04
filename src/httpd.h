@@ -27,36 +27,25 @@
 #ifndef _HTTPD_H_
 #define _HTTPD_H_
 
-#include <pthread.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-
 #define HTTPD_MAX_REQUEST_SIZE 4096
 #define HTTPD_MAX_RESPONSE_SIZE 8192
-#define HTTPD_DEFAULT_PORT 8080
+#define HTTPD_MAX_SERVERS 4
 
 typedef struct {
-    int running;
+    int enabled;
     int port;
-    int server_fd;
-    pthread_t thread;
-    int header_echo;
-    char docroot[256];
-    int active_connections;
-} httpd_server_t;
+    int pc_id;
+} vpcs_httpd_server_t;
 
-extern httpd_server_t httpd_server;
+extern vpcs_httpd_server_t vpcs_httpd_servers[HTTPD_MAX_SERVERS];
 
-/* HTTP server functions */
-int httpd_start(int port, const char *docroot);
-int httpd_stop(void);
-int httpd_status(void);
-void httpd_set_header_echo(int enable);
+/* VPCS virtual HTTP server functions */
+int vpcs_httpd_start(int port);
+int vpcs_httpd_stop(int port);
+int vpcs_httpd_status(void);
+void vpcs_httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len);
 
-/* Internal functions */
-void *httpd_thread(void *arg);
-void httpd_handle_client(int client_fd);
-void httpd_send_response(int client_fd, const char *status, const char *content_type, const char *body);
-void httpd_send_headers_echo(int client_fd, const char *request);
+/* HTTP client functions */
+int httpd_client_get(const char *host, int port, const char *path);
 
 #endif /* _HTTPD_H_ */
