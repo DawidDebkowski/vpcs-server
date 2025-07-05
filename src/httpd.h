@@ -35,15 +35,15 @@ typedef struct {
     int enabled;
     int port;
     int pc_id;
-} vpcs_httpd_server_t;
+} httpd_server_t;
 
-extern vpcs_httpd_server_t vpcs_httpd_servers[HTTPD_MAX_SERVERS];
+extern httpd_server_t httpd_servers[HTTPD_MAX_SERVERS];
 
 /* VPCS virtual HTTP server functions */
-int vpcs_httpd_start(int port);
-int vpcs_httpd_stop(int port);
-int vpcs_httpd_status(void);
-void vpcs_httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len);
+int httpd_start(int port);
+int httpd_stop(int port);
+int httpd_status(void);
+void httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len);
 
 /* HTTP client functions */
 int httpd_client_get(const char *host, int port, const char *path);

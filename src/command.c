@@ -2112,7 +2112,7 @@ int run_httpd(int argc, char **argv)
 		}
 		
 		/* Use VPCS virtual server */
-		return vpcs_httpd_start(port);
+		return httpd_start(port);
 	}
 	else if (!strcmp(argv[1], "stop")) {
 		int port = 8080; /* Default HTTP port */
@@ -2125,10 +2125,10 @@ int run_httpd(int argc, char **argv)
 			}
 		}
 		
-		return vpcs_httpd_stop(port);
+		return httpd_stop(port);
 	}
 	else if (!strcmp(argv[1], "status")) {
-		return vpcs_httpd_status();
+		return httpd_status();
 	}
 	else if (!strcmp(argv[1], "get")) {
 		if (argc < 3) {

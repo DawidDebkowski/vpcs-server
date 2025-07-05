@@ -616,7 +616,7 @@ int tcp(pcs *pc, struct packet *m)
 	
 	if (ti->ti_flags == TH_SYN && cb == NULL) {
 		/* Check if we have an HTTP server on this port */
-		extern vpcs_httpd_server_t vpcs_httpd_servers[];
+		extern httpd_server_t httpd_servers[];
 		int dest_port = ntohs(ti->ti_dport);
 		int server_found = 0;
 		
@@ -624,9 +624,9 @@ int tcp(pcs *pc, struct packet *m)
 		    //    dest_port, inet_ntoa(*(struct in_addr*)&ip->sip));
 		
 		for (int j = 0; j < HTTPD_MAX_SERVERS; j++) {
-			if (vpcs_httpd_servers[j].enabled && 
-			    vpcs_httpd_servers[j].port == dest_port && 
-			    vpcs_httpd_servers[j].pc_id == pcid) {
+			if (httpd_servers[j].enabled && 
+			    httpd_servers[j].port == dest_port && 
+			    httpd_servers[j].pc_id == pcid) {
 				server_found = 1;
 				// printf("DEBUG: Found HTTP server on port %d for PC %d\n", dest_port, pcid);
 				break;
@@ -733,7 +733,7 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 		char response_buffer[HTTPD_MAX_RESPONSE_SIZE];
 		int response_len = 0;
 		
-		vpcs_httpd_handle_request(dest_port, http_data, orig_dsize, response_buffer, &response_len);
+		httpd_handle_request(dest_port, http_data, orig_dsize, response_buffer, &response_len);
 		
 		if (response_len > 0) {
 			// printf("DEBUG: Generated HTTP response, size: %d\n", response_len);
