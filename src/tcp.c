@@ -104,7 +104,7 @@ int tcp_open(pcs *pc, int ipv)
 	}
 	
 	/* try to connect */
-	printf("DEBUG: tcp_open - attempting to connect, ipv=%d\n", ipv);
+	//printf("DEBUG: tcp_open - attempting to connect, ipv=%d\n", ipv);
 	while (i++ < 3 && ctrl_c == 0) {
 		struct timeval tv;
 		
@@ -113,7 +113,7 @@ int tcp_open(pcs *pc, int ipv)
 		pc->mscb.seq = rand();
 		pc->mscb.ack = 0;
 
-		printf("DEBUG: tcp_open - sending SYN attempt %d, seq=%u\n", i, pc->mscb.seq);
+		// printf("DEBUG: tcp_open - sending SYN attempt %d, seq=%u\n", i, pc->mscb.seq);
 		
 		m = fpacket(pc);
 	
@@ -134,23 +134,23 @@ int tcp_open(pcs *pc, int ipv)
 			while ((p = deq(&pc->iq)) != NULL && 
 			    !timeout(tv, pc->mscb.waittime) && !ctrl_c) {	
 				
-				printf("DEBUG: tcp_open - received response packet\n");
+				// printf("DEBUG: tcp_open - received response packet\n");
 				ok = fresponse(p, &pc->mscb);
 				del_pkt(p);
 
 				if (!ok) {
-					printf("DEBUG: tcp_open - fresponse failed\n");
+					// printf("DEBUG: tcp_open - fresponse failed\n");
 					continue;
 				}
 
 				if (ok == IPPROTO_ICMP) {
-					printf("DEBUG: tcp_open - received ICMP response\n");
+					// printf("DEBUG: tcp_open - received ICMP response\n");
 					return 2;
 				}
 				
 				if (pc->mscb.rack == (pc->mscb.seq + 1) && 
 					pc->mscb.rflags == (TH_SYN | TH_ACK)) {
-					printf("DEBUG: tcp_open - received SYN+ACK, connection established\n");
+					// printf("DEBUG: tcp_open - received SYN+ACK, connection established\n");
 					state = 1;
 					tv.tv_sec = 0;
 					break;
@@ -184,20 +184,20 @@ int tcp_open(pcs *pc, int ipv)
 		}
 		
 		if (state != 1) {
-			printf("DEBUG: tcp_open - attempt %d failed, state=%d\n", i, state);
+			// printf("DEBUG: tcp_open - attempt %d failed, state=%d\n", i, state);
 			continue;
 		}
 		
 		/* reply ACK , ack+1 */
 		pc->mscb.seq = pc->mscb.rack;
 		pc->mscb.ack = pc->mscb.rseq + 1;
-		printf("DEBUG: tcp_open - sending final ACK to complete handshake\n");
+		// printf("DEBUG: tcp_open - sending final ACK to complete handshake\n");
 		tcp_ack(pc, ipv);
 
-		printf("DEBUG: tcp_open - connection established successfully\n");
+		// printf("DEBUG: tcp_open - connection established successfully\n");
 		return 1;
 	}
-	printf("DEBUG: tcp_open - all connection attempts failed\n");
+	// printf("DEBUG: tcp_open - all connection attempts failed\n");
 	return 0;
 }
 /*
@@ -462,18 +462,18 @@ int tcpReplyPacket(tcphdr *th, sesscb *cb, int tcplen)
 	cb->rflags = th->th_flags;
 	cb->winsize = ntohs(th->th_win);
 	
-	printf("DEBUG: tcpReplyPacket - incoming flags: 0x%02x, seq: %u, ack: %u\n", 
-	       th->th_flags, ntohl(th->th_seq), ntohl(th->th_ack));
+	// printf("DEBUG: tcpReplyPacket - incoming flags: 0x%02x, seq: %u, ack: %u\n", 
+	       // th->th_flags, ntohl(th->th_seq), ntohl(th->th_ack));
 	
 	if (cb->flags != (TH_RST | TH_FIN)) {		
 		switch (th->th_flags) {
 			case TH_SYN:
-				printf("DEBUG: Processing SYN - will reply with SYN+ACK\n");
+				// printf("DEBUG: Processing SYN - will reply with SYN+ACK\n");
 				cb->flags = TH_ACK | TH_SYN;
 				cb->ack++;
 				break;
 			case TH_ACK | TH_PUSH:
-				printf("DEBUG: Processing ACK+PUSH - data size: %d\n", tcplen - (th->th_off << 2));
+				// printf("DEBUG: Processing ACK+PUSH - data size: %d\n", tcplen - (th->th_off << 2));
 				cb->flags = TH_ACK | TH_PUSH;
 				dsize = tcplen - (th->th_off << 2);
 				
@@ -484,17 +484,17 @@ int tcpReplyPacket(tcphdr *th, sesscb *cb, int tcplen)
 				}
 				break;
 			case TH_ACK | TH_FIN:
-				printf("DEBUG: Processing ACK+FIN\n");
+				// printf("DEBUG: Processing ACK+FIN\n");
 				cb->flags = (TH_ACK | TH_FIN);
 				cb->ack++;
 				break;
 			case TH_ACK | TH_FIN | TH_PUSH:
 			case TH_FIN | TH_PUSH:
-				printf("DEBUG: Processing FIN+PUSH\n");
+				// printf("DEBUG: Processing FIN+PUSH\n");
 				dsize = tcplen - (th->th_off << 2);
 
 			case TH_FIN:
-				printf("DEBUG: Processing FIN\n");
+				// printf("DEBUG: Processing FIN\n");
 				if (cb->flags == (TH_ACK | TH_FIN))
 					cb->flags = TH_FIN | TH_ACK;
 				else
@@ -504,7 +504,7 @@ int tcpReplyPacket(tcphdr *th, sesscb *cb, int tcplen)
 				clientfinack = 1;
 				break;
 			default:
-				printf("DEBUG: Unknown/unsupported flags: 0x%02x\n", th->th_flags);
+				// printf("DEBUG: Unknown/unsupported flags: 0x%02x\n", th->th_flags);
 				return 0;	
 		}
 	}
@@ -514,8 +514,8 @@ int tcpReplyPacket(tcphdr *th, sesscb *cb, int tcplen)
 	th->th_seq = htonl(cb->seq);
 	th->th_flags = cb->flags;
 	
-	printf("DEBUG: tcpReplyPacket - outgoing flags: 0x%02x, seq: %u, ack: %u\n", 
-	       cb->flags, cb->seq, cb->ack + dsize);
+	// printf("DEBUG: tcpReplyPacket - outgoing flags: 0x%02x, seq: %u, ack: %u\n", 
+	//        cb->flags, cb->seq, cb->ack + dsize);
 	
 	/* ignore the tcp options */
 	if ((th->th_off << 2) > sizeof(tcphdr))
@@ -537,16 +537,16 @@ int tcp(pcs *pc, struct packet *m)
 	int i;
 	
 	if (ip->dip != pc->ip4.ip) {
-		printf("DEBUG: Packet not for us - dst: %s, our IP: %s\n", 
-		       inet_ntoa(*(struct in_addr*)&ip->dip), 
-		       inet_ntoa(*(struct in_addr*)&pc->ip4.ip));
+		// printf("DEBUG: Packet not for us - dst: %s, our IP: %s\n", 
+		//        inet_ntoa(*(struct in_addr*)&ip->dip), 
+		//        inet_ntoa(*(struct in_addr*)&pc->ip4.ip));
 		return PKT_DROP;
 	}
 	
-	printf("DEBUG: TCP packet received - src: %s:%d -> dst: %s:%d, flags: 0x%02x\n",
-	       inet_ntoa(*(struct in_addr*)&ip->sip), ntohs(ti->ti_sport),
-	       inet_ntoa(*(struct in_addr*)&ip->dip), ntohs(ti->ti_dport),
-	       ti->ti_flags);
+	// printf("DEBUG: TCP packet received - src: %s:%d -> dst: %s:%d, flags: 0x%02x\n",
+	//        inet_ntoa(*(struct in_addr*)&ip->sip), ntohs(ti->ti_sport),
+	//        inet_ntoa(*(struct in_addr*)&ip->dip), ntohs(ti->ti_dport),
+	//        ti->ti_flags);
 
 	/* response packet 
 	 * 1. socket opened
@@ -557,12 +557,12 @@ int tcp(pcs *pc, struct packet *m)
 	if (pc->mscb.sock && ntohs(ti->ti_dport) == pc->mscb.sport && 
 	    ntohs(ti->ti_sport) == pc->mscb.dport && 
 	    ip->sip == pc->mscb.dip && pc->mscb.proto == ip->proto) {
-		printf("DEBUG: This is a response to our outgoing connection\n");
+		// printf("DEBUG: This is a response to our outgoing connection\n");
 		/* mscb is actived, up to the upper application */
 		if (time_tick - pc->mscb.timeout <= TCP_TIMEOUT)
 			return PKT_UP;
 
-		printf("DEBUG: Client connection timed out, sending RST\n");
+		// printf("DEBUG: Client connection timed out, sending RST\n");
 		/* not mine, reset the request */
 		sesscb rcb;
 		
@@ -588,7 +588,7 @@ int tcp(pcs *pc, struct packet *m)
 	/* request process
 	 * find control block 
 	 */
-	printf("DEBUG: Looking for existing session or creating new one\n");
+	// printf("DEBUG: Looking for existing session or creating new one\n");
 	for (i = 0; i < MAX_SESSIONS; i++) {
 		if (ti->ti_flags == TH_SYN) {
 			if (pc->sesscb[i].timeout == 0 || 
@@ -630,26 +630,26 @@ int tcp(pcs *pc, struct packet *m)
 		int dest_port = ntohs(ti->ti_dport);
 		int server_found = 0;
 		
-		printf("DEBUG: SYN received on port %d from %s, checking for HTTP server...\n", 
-		       dest_port, inet_ntoa(*(struct in_addr*)&ip->sip));
+		// printf("DEBUG: SYN received on port %d from %s, checking for HTTP server...\n", 
+		    //    dest_port, inet_ntoa(*(struct in_addr*)&ip->sip));
 		
 		for (int j = 0; j < HTTPD_MAX_SERVERS; j++) {
 			if (vpcs_httpd_servers[j].enabled && 
 			    vpcs_httpd_servers[j].port == dest_port && 
 			    vpcs_httpd_servers[j].pc_id == pcid) {
 				server_found = 1;
-				printf("DEBUG: Found HTTP server on port %d for PC %d\n", dest_port, pcid);
+				// printf("DEBUG: Found HTTP server on port %d for PC %d\n", dest_port, pcid);
 				break;
 			}
 		}
 		
 		if (!server_found) {
-			printf("DEBUG: No HTTP server found on port %d for PC %d\n", dest_port, pcid);
+			// printf("DEBUG: No HTTP server found on port %d for PC %d\n", dest_port, pcid);
 			printf("VPCS %d out of session\n", pc->id);
 			return PKT_DROP;
 		}
 		
-		printf("DEBUG: Allocating session for HTTP server on port %d\n", dest_port);
+		// printf("DEBUG: Allocating session for HTTP server on port %d\n", dest_port);
 		
 		/* Try to find a free session for the HTTP server */
 		for (i = 0; i < MAX_SESSIONS; i++) {
@@ -667,35 +667,35 @@ int tcp(pcs *pc, struct packet *m)
 		}
 		
 		if (cb == NULL) {
-			printf("DEBUG: VPCS %d out of session - no free sessions available\n", pc->id);
+			// printf("DEBUG: VPCS %d out of session - no free sessions available\n", pc->id);
 			return PKT_DROP;
 		}
 		
-		printf("DEBUG: Session allocated for HTTP server - session %d\n", (int)(cb - pc->sesscb));
+		// printf("DEBUG: Session allocated for HTTP server - session %d\n", (int)(cb - pc->sesscb));
 	}
 	
 	if (cb != NULL) {
 		if (ti->ti_flags == TH_ACK && cb->flags == TH_FIN) {
 			/* clear session */
-			printf("DEBUG: Clearing session - received final ACK\n");
+			// printf("DEBUG: Clearing session - received final ACK\n");
 			memset(cb, 0, sizeof(sesscb));
 		} else {
 			cb->timeout = time_tick;
-			printf("DEBUG: Processing packet with flags 0x%02x, generating reply\n", ti->ti_flags);
+			// printf("DEBUG: Processing packet with flags 0x%02x, generating reply\n", ti->ti_flags);
 			p = tcpReply(m, cb);
 			
 			/* push m into the background output queue which is watched by pth_output */
 			if (p != NULL) {
-				printf("DEBUG: Reply packet queued successfully\n");
+				// printf("DEBUG: Reply packet queued successfully\n");
 				enq(&pc->bgoq, p);
 			} else {
-				printf("DEBUG: Failed to create reply packet\n");
+				// printf("DEBUG: Failed to create reply packet\n");
 			}
 			
 			/* send FIN after ACK if got FIN */
 			if ((cb->rflags & TH_FIN) == TH_FIN && 
 			    cb->flags == (TH_ACK | TH_FIN)) {
-				printf("DEBUG: Sending FIN after ACK\n");
+				// printf("DEBUG: Sending FIN after ACK\n");
 				p = tcpReply(m, cb);
 				
 				/* push m into the background output queue which is watched by pth_output */
@@ -705,7 +705,7 @@ int tcp(pcs *pc, struct packet *m)
 			}
 		}
 	} else {
-		printf("DEBUG: No session control block found for packet\n");
+		// printf("DEBUG: No session control block found for packet\n");
 	}
 
 	/* anyway tell caller to drop this packet */
@@ -737,7 +737,7 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 		int dest_port = ntohs(orig_th->th_dport);
 		char *http_data = (char *)orig_th + (orig_th->th_off << 2);
 		
-		printf("DEBUG: Received HTTP data on port %d, size: %d\n", dest_port, orig_dsize);
+		// printf("DEBUG: Received HTTP data on port %d, size: %d\n", dest_port, orig_dsize);
 		
 		/* Check if we have HTTP server on this port */
 		char response_buffer[HTTPD_MAX_RESPONSE_SIZE];
@@ -746,7 +746,7 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 		vpcs_httpd_handle_request(dest_port, http_data, orig_dsize, response_buffer, &response_len);
 		
 		if (response_len > 0) {
-			printf("DEBUG: Generated HTTP response, size: %d\n", response_len);
+			// printf("DEBUG: Generated HTTP response, size: %d\n", response_len);
 			/* Create HTTP response packet */
 			len = sizeof(ethdr) + sizeof(iphdr) + sizeof(tcphdr) + response_len;
 			m = new_pkt(len);
@@ -776,12 +776,12 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 			
 			int rt = tcpReplyPacket(th, cb, tcplen);
 			if (rt == 0) {
-				printf("DEBUG: tcpReplyPacket failed for HTTP response\n");
+				// printf("DEBUG: tcpReplyPacket failed for HTTP response\n");
 				del_pkt(m);
 				return NULL;
 			}
 			
-			printf("DEBUG: HTTP response packet created successfully\n");
+			// printf("DEBUG: HTTP response packet created successfully\n");
 			
 			/* Update TCP header data size */
 			ti->ti_len = htons(len - sizeof(iphdr));
@@ -806,14 +806,14 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 				
 			return m;
 		} else {
-			printf("DEBUG: No HTTP response generated\n");
+			// printf("DEBUG: No HTTP response generated\n");
 		}
 	} else {
-		printf("DEBUG: Not HTTP data packet - flags: 0x%02x, dsize: %d\n", orig_th->th_flags, orig_dsize);
+		// printf("DEBUG: Not HTTP data packet - flags: 0x%02x, dsize: %d\n", orig_th->th_flags, orig_dsize);
 	}
 	
 	/* Default TCP reply (no HTTP data) */
-	printf("DEBUG: Creating default TCP reply packet\n");
+	// printf("DEBUG: Creating default TCP reply packet\n");
 	len = sizeof(ethdr) + sizeof(iphdr) + sizeof(tcphdr);
 	m = new_pkt(len);
 	if (m == NULL)
@@ -835,12 +835,12 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 	
 	int rt = tcpReplyPacket(th, cb, tcplen);
 	if (rt == 0) {
-		printf("DEBUG: tcpReplyPacket failed for default TCP reply\n");
+		// printf("DEBUG: tcpReplyPacket failed for default TCP reply\n");
 		del_pkt(m);
 		return NULL;
 	} 
 	
-	printf("DEBUG: Default TCP reply packet created successfully\n");
+	// printf("DEBUG: Default TCP reply packet created successfully\n");
 			
 	ti->ti_len = htons(len - sizeof(iphdr));
 	

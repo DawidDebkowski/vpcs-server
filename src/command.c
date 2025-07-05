@@ -1878,7 +1878,7 @@ int run_ver(int argc, char **argv)
 		"VPCS is free software, distributed under the terms of the \"BSD\" licence.\r\n"
 		"Source code and license can be found at vpcs.sf.net.\r\n"
 		"For more information, please visit wiki.freecode.com.cn.\r\n"
-		"\r\n\r\nServer Version!\r\n",
+		"\r\n\r\nServer Version 2!\r\n",
 		ver, __DATE__, __TIME__ );
 
 	return 1;

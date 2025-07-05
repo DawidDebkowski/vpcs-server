@@ -12,6 +12,8 @@
 #include "tcp.h"
 #include "utils.h"
 #include "queue.h"
+#include "packets.h"
+#include "ip.h"
 
 /* VPCS virtual HTTP servers */
 vpcs_httpd_server_t vpcs_httpd_servers[HTTPD_MAX_SERVERS] = {0};
@@ -171,7 +173,8 @@ int httpd_client_get(const char *host, int port, const char *path)
     int k;
     struct timeval ts, ts0;
     int usec;
-    int dsize;
+    int gip;
+    unsigned int gwip;
     
     printf("Connecting to %s:%d%s using VPCS virtual TCP stack\n", host, port, path);
     
@@ -181,19 +184,43 @@ int httpd_client_get(const char *host, int port, const char *path)
         return -1;
     }
     
-    /* Set up connection parameters */
-    pc->mscb.sip = pc->ip4.ip;  /* Source IP: our own IP */
-    pc->mscb.dip = addr.s_addr; /* Destination IP */
-    pc->mscb.dport = port;
+    /* Set up connection parameters - following ping pattern */
+    pc->mscb.frag = true;             /* Allow fragmentation */
+    pc->mscb.mtu = pc->mtu;           /* MTU */
+    pc->mscb.waittime = 5000;         /* 5 second timeout */
+    pc->mscb.ipid = time(0) & 0xffff; /* IP ID */
+    pc->mscb.seq = time(0);           /* Sequence */
+    pc->mscb.proto = IPPROTO_TCP;     /* Protocol */
+    pc->mscb.ttl = TTL;               /* TTL */
+    pc->mscb.dsize = 0;               /* No data in SYN */
     pc->mscb.sport = 1024 + (rand() % 64511); /* Random source port */
-    pc->mscb.proto = IPPROTO_TCP;
-    pc->mscb.timeout = 0;
-    pc->mscb.waittime = 5000; /* 5 second timeout */
-    pc->mscb.sock = 1; /* Mark socket as open */
+    pc->mscb.dport = port;            /* Destination port */
+    pc->mscb.sip = pc->ip4.ip;        /* Source IP: our own IP */
+    pc->mscb.dip = addr.s_addr;       /* Destination IP */
     memcpy(pc->mscb.smac, pc->ip4.mac, ETH_ALEN); /* Source MAC */
-    pc->mscb.ttl = TTL; /* TTL */
-    pc->mscb.winsize = 65535; /* Window size */
-    pc->mscb.mtu = pc->mtu; /* MTU */
+    pc->mscb.sock = 1;                /* Mark socket as open */
+    pc->mscb.winsize = 0xb68;         /* Window size (1460 * 4) */
+    pc->mscb.timeout = 0;             /* Reset timeout */
+    
+    /* Resolve destination MAC address - following ping pattern */
+    gwip = pc->ip4.gw;
+    if (sameNet(pc->mscb.dip, pc->ip4.ip, pc->ip4.cidr))
+        gip = pc->mscb.dip;
+    else {
+        if (gwip == 0) {
+            printf("No gateway found\n");
+            return -1;
+        }
+        gip = gwip;
+    }
+    
+    /* Get the ether address of the destination */
+    if (!arpResolve(pc, gip, pc->mscb.dmac)) {
+        struct in_addr in;
+        in.s_addr = gip;
+        printf("host (%s) not reachable\n", inet_ntoa(in));
+        return -1;
+    }
     
     /* Prepare HTTP request */
     snprintf(request, sizeof(request),
@@ -214,10 +241,9 @@ int httpd_client_get(const char *host, int port, const char *path)
     /* Connect to server */
     gettimeofday(&ts, NULL);
     
-    dsize = pc->mscb.dsize;
+    /* Clear data size for SYN packet */
     pc->mscb.dsize = 0; /* No data in SYN */
     k = tcp_open(pc, 4);
-    pc->mscb.dsize = dsize;
     
     gettimeofday(&ts0, NULL);
     usec = (ts0.tv_sec - ts.tv_sec) * 1000000 + ts0.tv_usec - ts.tv_usec;
@@ -238,8 +264,9 @@ int httpd_client_get(const char *host, int port, const char *path)
     /* Send HTTP request */
     gettimeofday(&ts, NULL);
     
+    /* Set up the HTTP request data */
     pc->mscb.dsize = strlen(request);
-    memcpy(pc->mscb.data, request, pc->mscb.dsize);
+    pc->mscb.data = request;  /* Point to the request buffer, don't copy */
     
     k = tcp_send(pc, 4);
     

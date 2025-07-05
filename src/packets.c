@@ -98,7 +98,7 @@ int upv4(pcs *pc, struct packet **m0)
 			struct packet *p;
 			iphdr *ip = (iphdr *)(eh + 1);
 			
-			printf("DEBUG: upv4 - received IP packet from %s to %s, proto: %d\n", 
+			printf("DEBUG: upv4 PC - received IP packet from %s to %s, proto: %d\n", 
 			       inet_ntoa(*(struct in_addr*)&ip->sip), 
 			       inet_ntoa(*(struct in_addr*)&ip->dip), 
 			       ip->proto);
@@ -234,7 +234,7 @@ void send4(pcs *pc, struct packet *m)
 	}
 	
 	iphdr *ip = (iphdr *)(eh + 1);
-	printf("DEBUG: send4 - sending packet from %s to %s, proto: %d\n", 
+	printf("DEBUG: send4 PC - sending packet from %s to %s, proto: %d\n", 
 	       inet_ntoa(*(struct in_addr*)&ip->sip), 
 	       inet_ntoa(*(struct in_addr*)&ip->dip), 
 	       ip->proto);
@@ -554,11 +554,18 @@ struct packet *packet(pcs *pc)
 	 	 */
 
 		/* fill the data */
-		for (i = optlen; i < dlen; i++) {
-			if ((i % 2) == 0)
-				*data++ = 0xd;
-			else
-				*data++ = 0xa;
+		if (sesscb->data != NULL && (dlen - optlen) > 0) {
+			/* Use actual data if available (for HTTP requests, etc.) */
+			int data_len = dlen - optlen;
+			memcpy(data, sesscb->data, data_len);
+		} else {
+			/* Default pattern for testing */
+			for (i = optlen; i < dlen; i++) {
+				if ((i % 2) == 0)
+					*data++ = 0xd;
+				else
+					*data++ = 0xa;
+			}
 		}
 		
 		bcopy(((struct ipovly *)ip)->ih_x1, b, 9);
