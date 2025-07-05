@@ -272,21 +272,15 @@ int tcp_send(pcs *pc, int ipv)
 					return 1;
 				}
 				if (pc->mscb.rflags == (TH_ACK | TH_PUSH)) {
-					unsigned int tseq;
-					
-					tseq = pc->mscb.seq;
-					
+					/* Server sent ACK+PUSH+DATA (HTTP response) */
 					pc->mscb.seq = pc->mscb.rack;
 					pc->mscb.ack = pc->mscb.rseq + pc->mscb.rdsize;
 					
+					/* Send ACK to acknowledge the response data */
 					tcp_ack(pc, ipv);
 					
-					if (pc->mscb.seq == tseq+ pc->mscb.dsize)
-						return 1;
-					else {
-						delay_ms(1);
-						continue;
-					}
+					/* HTTP transaction complete */
+					return 1;
 				}
 					
 				/* the remote does not like me, closing the connection */	
@@ -474,14 +468,10 @@ int tcpReplyPacket(tcphdr *th, sesscb *cb, int tcplen)
 				break;
 			case TH_ACK | TH_PUSH:
 				// printf("DEBUG: Processing ACK+PUSH - data size: %d\n", tcplen - (th->th_off << 2));
-				cb->flags = TH_ACK | TH_PUSH;
+				/* HTTP-style response: send ACK+PUSH+DATA (combined acknowledgment and response) */
+				cb->flags = TH_ACK | TH_PUSH;  /* Send ACK+PUSH+DATA */
 				dsize = tcplen - (th->th_off << 2);
-				
-				/* If we have HTTP response data, use it */
-				if (cb->dsize > 0) {
-					dsize = cb->dsize;
-					cb->dsize = 0; /* Reset for next use */
-				}
+				cb->ack += dsize;  /* Acknowledge received data */
 				break;
 			case TH_ACK | TH_FIN:
 				// printf("DEBUG: Processing ACK+FIN\n");
