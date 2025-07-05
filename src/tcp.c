@@ -533,10 +533,10 @@ int tcp(pcs *pc, struct packet *m)
 		return PKT_DROP;
 	}
 	
-	printf("DEBUG: TCP packet received - src: %s:%d -> dst: %s:%d, flags: 0x%02x\n",
-	       inet_ntoa(*(struct in_addr*)&ip->sip), ntohs(ti->ti_sport),
-	       inet_ntoa(*(struct in_addr*)&ip->dip), ntohs(ti->ti_dport),
-	       ti->ti_flags);
+	// printf("DEBUG: TCP packet received - src: %s:%d -> dst: %s:%d, flags: 0x%02x\n",
+	//        inet_ntoa(*(struct in_addr*)&ip->sip), ntohs(ti->ti_sport),
+	//        inet_ntoa(*(struct in_addr*)&ip->dip), ntohs(ti->ti_dport),
+	//        ti->ti_flags);
 
 	/* response packet 
 	 * 1. socket opened
@@ -588,7 +588,7 @@ int tcp(pcs *pc, struct packet *m)
 			     ti->ti_sport == pc->sesscb[i].sport &&
 			     ti->ti_dport == pc->sesscb[i].dport)) {
 				/* get new scb */
-				printf("DEBUG: Found/created session %d for incoming SYN\n", i);
+				// printf("DEBUG: Found/created session %d for incoming SYN\n", i);
 				cb = &pc->sesscb[i];
 				cb->timeout = time_tick;
 				cb->seq = random();
@@ -607,7 +607,7 @@ int tcp(pcs *pc, struct packet *m)
 			    ti->ti_sport == pc->sesscb[i].sport &&
 			    ti->ti_dport == pc->sesscb[i].dport) {
 				/* get the scb */
-				printf("DEBUG: Found existing session %d for packet\n", i);
+				// printf("DEBUG: Found existing session %d for packet\n", i);
 				cb = &pc->sesscb[i];
 				break;
 			}	

@@ -233,7 +233,7 @@ void send4(pcs *pc, struct packet *m)
 		return;
 	}
 	
-	iphdr *ip = (iphdr *)(eh + 1);
+	// iphdr *ip = (iphdr *)(eh + 1);
 	// printf("DEBUG: send4 PC - sending packet from %s to %s, proto: %d\n", 
 	    //    inet_ntoa(*(struct in_addr*)&ip->sip), 
 	    //    inet_ntoa(*(struct in_addr*)&ip->dip), 
@@ -344,6 +344,7 @@ int response(struct packet *m, sesscb *sesscb)
 				i += data[i + 1];
 			}
 		} else {
+			sesscb->rdsize = n;  /* Set received data size */
 			sesscb->data = ((char*)(ip + 1)) + (ti->ti_off << 2);
 		}
 		return IPPROTO_TCP;

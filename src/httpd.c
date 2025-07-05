@@ -167,13 +167,14 @@ escape_done:
         "Server: VPCS-Virtual-HTTP/1.0\r\n"
         "Content-Type: text/html\r\n"
         "Connection: close\r\n"
-        "\r\n"
-        "<html><head><title>VPCS Virtual HTTP Server</title></head>"
-        "<body><h1>VPCS Virtual HTTP Server - PC%d:%d</h1>"
-        "<h2>Your Request Headers:</h2>"
-        "<pre>%s</pre>"
-        "</body></html>",
-        pcid + 1, port, escaped_request);
+        // "\r\n"
+        // "<html><head><title>VPCS Virtual HTTP Server</title></head>"
+        // "<body><h1>VPCS Virtual HTTP Server - PC%d:%d</h1>"
+        // "<h2>Your Request Headers:</h2>"
+        // "<pre>%s</pre>"
+        // "</body></html>",
+        // pcid + 1, port, escaped_request);
+    );
     
     printf("VPCS HTTP server PC%d:%d - served request (%d bytes response)\n", 
            pcid + 1, port, *response_len);
@@ -184,7 +185,7 @@ int httpd_client_get(const char *host, int port, const char *path)
 {
     extern int pcid;
     extern pcs vpc[];
-    extern int ctrl_c;
+    // extern int ctrl_c;
     
     pcs *pc = &vpc[pcid];
     struct in_addr addr;
@@ -300,72 +301,29 @@ int httpd_client_get(const char *host, int port, const char *path)
     
     printf("HTTP request sent (time=%.3f ms)\n", usec / 1000.0);
     
-    /* Wait for and process HTTP response */
-    printf("Waiting for HTTP response...\n");
-    gettimeofday(&ts, NULL);
-    
-    int response_received = 0;
-    char response_buffer[4096];
-    int total_response_len = 0;
-    
-    /* Wait up to 5 seconds for response */
-    while (!timeout(ts, 5000) && !response_received && !ctrl_c) {
-        delay_ms(10);
+    /* The server will respond with ACK+PUSH+DATA, which tcp_send already handled */
+    /* Check if we received response data */
+    if (k == 1 && pc->mscb.rdsize > 0 && pc->mscb.data != NULL) {
+        printf("\n--- HTTP Response (%d bytes) ---\n", pc->mscb.rdsize);
         
-        struct packet *resp_pkt;
-        while ((resp_pkt = deq(&pc->iq)) != NULL) {
-            /* Check if this is a TCP response packet */
-            iphdr *resp_ip = (iphdr *)(resp_pkt->data + sizeof(ethdr));
-            
-            if (resp_ip->proto == IPPROTO_TCP && 
-                resp_ip->sip == pc->mscb.dip && 
-                resp_ip->dip == pc->mscb.sip) {
-                
-                tcpiphdr *resp_ti = (tcpiphdr *)resp_ip;
-                
-                if (ntohs(resp_ti->ti_sport) == pc->mscb.dport && 
-                    ntohs(resp_ti->ti_dport) == pc->mscb.sport) {
-                    
-                    /* Check if this packet contains data (ACK + PUSH) */
-                    if ((resp_ti->ti_flags & (TH_ACK | TH_PUSH)) == (TH_ACK | TH_PUSH)) {
-                        int resp_tcplen = ntohs(resp_ip->len) - sizeof(iphdr);
-                        int resp_data_len = resp_tcplen - (resp_ti->ti_off << 2);
-                        
-                        if (resp_data_len > 0) {
-                            char *resp_data = (char *)resp_ti + (resp_ti->ti_off << 2);
-                            
-                            /* Copy response data to buffer */
-                            int copy_len = resp_data_len;
-                            if (total_response_len + copy_len > sizeof(response_buffer) - 1) {
-                                copy_len = sizeof(response_buffer) - 1 - total_response_len;
-                            }
-                            
-                            if (copy_len > 0) {
-                                memcpy(response_buffer + total_response_len, resp_data, copy_len);
-                                total_response_len += copy_len;
-                            }
-                            
-                            printf("Received HTTP response data (%d bytes)\n", resp_data_len);
-                            response_received = 1;
-                        }
-                    }
-                }
+        /* Print the response, handling non-printable characters */
+        for (int i = 0; i < pc->mscb.rdsize && i < 4096; i++) {
+            if (pc->mscb.data[i] >= 32 && pc->mscb.data[i] <= 126) {
+                printf("%c", pc->mscb.data[i]);
+            } else if (pc->mscb.data[i] == '\r') {
+                printf("\\r");
+            } else if (pc->mscb.data[i] == '\n') {
+                printf("\\n\n");
+            } else {
+                printf("\\x%02x", (unsigned char)pc->mscb.data[i]);
             }
-            del_pkt(resp_pkt);
         }
-    }
-    
-    /* Display the HTTP response */
-    if (response_received && total_response_len > 0) {
-        response_buffer[total_response_len] = '\0';
-        printf("\n--- HTTP Response (%d bytes) ---\n", total_response_len);
-        printf("%s", response_buffer);
         printf("\n--- End of HTTP Response ---\n");
     } else {
-        printf("No HTTP response received (timeout or no data)\n");
+        printf("No HTTP response received\n");
     }
     
-    /* Wait a bit more before closing */
+    /* Wait a bit before closing */
     delay_ms(100);
     
     /* Close connection */
