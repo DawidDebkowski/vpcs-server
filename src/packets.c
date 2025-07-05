@@ -83,12 +83,12 @@ int upv4(pcs *pc, struct packet **m0)
 	/* not ipv4 or arp */
 	if ((eh->type != htons(ETHERTYPE_IP)) && 
 	    (eh->type != htons(ETHERTYPE_ARP))) {
-		printf("DEBUG: upv4 - dropping packet, unsupported type: 0x%04x\n", ntohs(eh->type));
+		// printf("DEBUG: upv4 - dropping packet, unsupported type: 0x%04x\n", ntohs(eh->type));
 		return PKT_DROP;
 	}
 		
 	if (etherIsMulticast(eh->src)) {
-		printf("DEBUG: upv4 - dropping multicast packet\n");
+		// printf("DEBUG: upv4 - dropping multicast packet\n");
 		return PKT_DROP;
 	}
 
@@ -98,10 +98,10 @@ int upv4(pcs *pc, struct packet **m0)
 			struct packet *p;
 			iphdr *ip = (iphdr *)(eh + 1);
 			
-			printf("DEBUG: upv4 PC - received IP packet from %s to %s, proto: %d\n", 
-			       inet_ntoa(*(struct in_addr*)&ip->sip), 
-			       inet_ntoa(*(struct in_addr*)&ip->dip), 
-			       ip->proto);
+			// printf("DEBUG: upv4 PC - received IP packet from %s to %s, proto: %d\n", 
+			    //    inet_ntoa(*(struct in_addr*)&ip->sip), 
+			    //    inet_ntoa(*(struct in_addr*)&ip->dip), 
+			    //    ip->proto);
 
 			if (ntohs(ip->len) > pc->mtu) {
 				p = icmpReply(m, ICMP_UNREACH, ICMP_UNREACH_NEEDFRAG);
@@ -228,19 +228,19 @@ void send4(pcs *pc, struct packet *m)
 	}
 	
 	if (eh->type != htons(ETHERTYPE_IP)) {
-		printf("DEBUG: send4 - dropping non-IP packet, type: 0x%04x\n", ntohs(eh->type));
+		// printf("DEBUG: send4 - dropping non-IP packet, type: 0x%04x\n", ntohs(eh->type));
 		del_pkt(m);
 		return;
 	}
 	
 	iphdr *ip = (iphdr *)(eh + 1);
-	printf("DEBUG: send4 PC - sending packet from %s to %s, proto: %d\n", 
-	       inet_ntoa(*(struct in_addr*)&ip->sip), 
-	       inet_ntoa(*(struct in_addr*)&ip->dip), 
-	       ip->proto);
+	// printf("DEBUG: send4 PC - sending packet from %s to %s, proto: %d\n", 
+	    //    inet_ntoa(*(struct in_addr*)&ip->sip), 
+	    //    inet_ntoa(*(struct in_addr*)&ip->dip), 
+	    //    ip->proto);
 	
 	if( ! fix_dmac(pc, m) ){
-		printf("DEBUG: send4 - fix_dmac failed\n");
+		// printf("DEBUG: send4 - fix_dmac failed\n");
 		del_pkt(m);
 		return;
 	}
@@ -249,7 +249,7 @@ void send4(pcs *pc, struct packet *m)
 		m = ipfrag(m, pc->mtu);
 	}
 
-	printf("DEBUG: send4 - queuing packet for transmission\n");
+	// printf("DEBUG: send4 - queuing packet for transmission\n");
 	enq(&pc->oq, m);
 }
 

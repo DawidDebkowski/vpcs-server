@@ -90,12 +90,30 @@ int vpcs_httpd_status(void)
 
 void vpcs_httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len)
 {
-    printf("started handle\n");
     extern int pcid;
     char escaped_request[HTTPD_MAX_REQUEST_SIZE * 2];
     const char *src = data;
     char *dst = escaped_request;
     int i;
+    
+    printf("VPCS HTTP server PC%d:%d - received request (%d bytes):\n", 
+           pcid + 1, port, data_len);
+    printf("--- Start of received data ---\n");
+    for (i = 0; i < data_len && i < 512; i++) {
+        if (data[i] >= 32 && data[i] <= 126) {
+            printf("%c", data[i]);
+        } else if (data[i] == '\r') {
+            printf("\\r");
+        } else if (data[i] == '\n') {
+            printf("\\n\n");
+        } else {
+            printf("\\x%02x", (unsigned char)data[i]);
+        }
+    }
+    if (data_len > 512) {
+        printf("\n... (%d more bytes truncated)", data_len - 512);
+    }
+    printf("\n--- End of received data ---\n");
     
     /* Check if we have a server on this port */
     int server_found = 0;
@@ -166,6 +184,7 @@ int httpd_client_get(const char *host, int port, const char *path)
 {
     extern int pcid;
     extern pcs vpc[];
+    extern int ctrl_c;
     
     pcs *pc = &vpc[pcid];
     struct in_addr addr;
@@ -281,7 +300,72 @@ int httpd_client_get(const char *host, int port, const char *path)
     
     printf("HTTP request sent (time=%.3f ms)\n", usec / 1000.0);
     
-    /* Wait a bit for response */
+    /* Wait for and process HTTP response */
+    printf("Waiting for HTTP response...\n");
+    gettimeofday(&ts, NULL);
+    
+    int response_received = 0;
+    char response_buffer[4096];
+    int total_response_len = 0;
+    
+    /* Wait up to 5 seconds for response */
+    while (!timeout(ts, 5000) && !response_received && !ctrl_c) {
+        delay_ms(10);
+        
+        struct packet *resp_pkt;
+        while ((resp_pkt = deq(&pc->iq)) != NULL) {
+            /* Check if this is a TCP response packet */
+            iphdr *resp_ip = (iphdr *)(resp_pkt->data + sizeof(ethdr));
+            
+            if (resp_ip->proto == IPPROTO_TCP && 
+                resp_ip->sip == pc->mscb.dip && 
+                resp_ip->dip == pc->mscb.sip) {
+                
+                tcpiphdr *resp_ti = (tcpiphdr *)resp_ip;
+                
+                if (ntohs(resp_ti->ti_sport) == pc->mscb.dport && 
+                    ntohs(resp_ti->ti_dport) == pc->mscb.sport) {
+                    
+                    /* Check if this packet contains data (ACK + PUSH) */
+                    if ((resp_ti->ti_flags & (TH_ACK | TH_PUSH)) == (TH_ACK | TH_PUSH)) {
+                        int resp_tcplen = ntohs(resp_ip->len) - sizeof(iphdr);
+                        int resp_data_len = resp_tcplen - (resp_ti->ti_off << 2);
+                        
+                        if (resp_data_len > 0) {
+                            char *resp_data = (char *)resp_ti + (resp_ti->ti_off << 2);
+                            
+                            /* Copy response data to buffer */
+                            int copy_len = resp_data_len;
+                            if (total_response_len + copy_len > sizeof(response_buffer) - 1) {
+                                copy_len = sizeof(response_buffer) - 1 - total_response_len;
+                            }
+                            
+                            if (copy_len > 0) {
+                                memcpy(response_buffer + total_response_len, resp_data, copy_len);
+                                total_response_len += copy_len;
+                            }
+                            
+                            printf("Received HTTP response data (%d bytes)\n", resp_data_len);
+                            response_received = 1;
+                        }
+                    }
+                }
+            }
+            del_pkt(resp_pkt);
+        }
+    }
+    
+    /* Display the HTTP response */
+    if (response_received && total_response_len > 0) {
+        response_buffer[total_response_len] = '\0';
+        printf("\n--- HTTP Response (%d bytes) ---\n", total_response_len);
+        printf("%s", response_buffer);
+        printf("\n--- End of HTTP Response ---\n");
+    } else {
+        printf("No HTTP response received (timeout or no data)\n");
+    }
+    
+    /* Wait a bit more before closing */
     delay_ms(100);
     
     /* Close connection */
@@ -296,13 +380,6 @@ int httpd_client_get(const char *host, int port, const char *path)
     } else {
         printf("Connection closed (time=%.3f ms)\n", usec / 1000.0);
     }
-    
-    /* Note: In a real implementation, we would need to handle the response data
-     * that comes back from the server. This would require modifications to the
-     * TCP stack to capture and display the response data. For now, this 
-     * demonstrates the basic TCP connection flow using VPCS virtual stack.
-     */
-    printf("Note: Response data handling not yet implemented in this version\n");
     
     return 0;
 }

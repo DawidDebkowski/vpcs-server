@@ -529,7 +529,7 @@ int tcpReplyPacket(tcphdr *th, sesscb *cb, int tcplen)
 
 int tcp(pcs *pc, struct packet *m)
 {
-	printf("TCP\n");
+	// printf("TCP\n");
 	iphdr *ip = (iphdr *)(m->data + sizeof(ethdr));
 	tcpiphdr *ti = (tcpiphdr *)(ip);
 	sesscb *cb = NULL;
@@ -543,10 +543,10 @@ int tcp(pcs *pc, struct packet *m)
 		return PKT_DROP;
 	}
 	
-	// printf("DEBUG: TCP packet received - src: %s:%d -> dst: %s:%d, flags: 0x%02x\n",
-	//        inet_ntoa(*(struct in_addr*)&ip->sip), ntohs(ti->ti_sport),
-	//        inet_ntoa(*(struct in_addr*)&ip->dip), ntohs(ti->ti_dport),
-	//        ti->ti_flags);
+	printf("DEBUG: TCP packet received - src: %s:%d -> dst: %s:%d, flags: 0x%02x\n",
+	       inet_ntoa(*(struct in_addr*)&ip->sip), ntohs(ti->ti_sport),
+	       inet_ntoa(*(struct in_addr*)&ip->dip), ntohs(ti->ti_dport),
+	       ti->ti_flags);
 
 	/* response packet 
 	 * 1. socket opened
