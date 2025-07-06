@@ -92,13 +92,14 @@ int httpd_status(void)
 // hook in the tcp protocol to handle httpd data if a server is present at the given ip+port
 void httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len)
 {
-    if (data_len >= 4 && 
-        !(strncmp(data, "GET ", 4) == 0 ||
-         strncmp(data, "POST", 4) == 0 ||
-         strncmp(data, "HEAD", 4) == 0 ||
-         strncmp(data, "PUT ", 4) == 0)) {
-        printf("VPCS HTTP server port %d - received request (%d bytes) and its not http data\n", port, data_len);
-        response_len = 0;
+    /* Validate HTTP request - check if it starts with a valid HTTP method */
+    if (data_len < 4 || 
+        (strncmp(data, "GET ", 4) != 0 &&
+         strncmp(data, "POST", 4) != 0 &&
+         strncmp(data, "HEAD", 4) != 0 &&
+         strncmp(data, "PUT ", 4) != 0)) {
+        printf("VPCS HTTP server port %d - received non-HTTP data (%d bytes)\n", port, data_len);
+        *response_len = 0;
         return;
     }
     
@@ -123,7 +124,7 @@ void httpd_handle_request(int port, const char *data, int data_len, char *respon
     /* Generate HTTP response with echo */
     *response_len = snprintf(response, HTTPD_MAX_RESPONSE_SIZE,
         "HTTP/1.0 200 OK\r\n"
-        "Server: VPCS-Virtual-HTTP/1.0\r\n"
+        "Server: VPCS-HTTP/1.0\r\n"
         "Content-Type: text/plain\r\n"
         "Connection: close\r\n"
         "\r\n"
@@ -158,12 +159,13 @@ int httpd_client_get(const char *host, int port, const char *path)
     }
     
     /* Set up connection parameters - following ping pattern */
+    // mscb - my session control block
     pc->mscb.frag = true;             /* Allow fragmentation */
-    pc->mscb.mtu = pc->mtu;           /* MTU */
+    pc->mscb.mtu = pc->mtu;           /* Max Transmission Unit */
     pc->mscb.waittime = 5000;         /* 5 second timeout */
     pc->mscb.ipid = time(0) & 0xffff; /* IP ID */
     pc->mscb.seq = time(0);           /* Sequence */
-    pc->mscb.proto = IPPROTO_TCP;     /* Protocol */
+    pc->mscb.proto = IPPROTO_TCP;     /* Protocol number*/
     pc->mscb.ttl = TTL;               /* TTL */
     pc->mscb.dsize = 0;               /* No data in SYN */
     pc->mscb.sport = 1024 + (rand() % 64511); /* Random source port */
