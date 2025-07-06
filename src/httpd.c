@@ -55,7 +55,8 @@ int httpd_stop(int port)
     int i;
     
     for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
-        if (httpd_servers[i].enabled && httpd_servers[i].port == port) {
+        if (httpd_servers[i].enabled && 
+            httpd_servers[i].port == port) {
             httpd_servers[i].enabled = 0;
             printf("VPCS HTTP server on port %d stopped\n", port);
             return 1;
@@ -91,11 +92,10 @@ int httpd_status(void)
 // hook in the tcp protocol to handle httpd data if a server is present at the given ip+port
 void httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len)
 {
-    extern int pcid;
     int i;
     
-    printf("VPCS HTTP server PC%d:%d - received request (%d bytes):\n", 
-           pcid + 1, port, data_len);
+    printf("VPCS HTTP server port %d - received request (%d bytes):\n", 
+           port, data_len);
     printf("--- Start of received data ---\n");
     for (i = 0; i < data_len && i < 512; i++) {
         if (data[i] >= 32 && data[i] <= 126) {
@@ -113,12 +113,10 @@ void httpd_handle_request(int port, const char *data, int data_len, char *respon
     }
     printf("\n--- End of received data ---\n");
     
-    /* Check if we have a server on this port */
+    /* Check if we have ANY server on this port (TCP stack already routed to correct PC) */
     int server_found = 0;
     for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
-        if (httpd_servers[i].enabled && 
-            httpd_servers[i].port == port && 
-            httpd_servers[i].pc_id == pcid) {
+        if (httpd_servers[i].enabled && httpd_servers[i].port == port) {
             server_found = 1;
             break;
         }
@@ -133,20 +131,14 @@ void httpd_handle_request(int port, const char *data, int data_len, char *respon
     *response_len = snprintf(response, HTTPD_MAX_RESPONSE_SIZE,
         "HTTP/1.0 200 OK\r\n"
         "Server: VPCS-Virtual-HTTP/1.0\r\n"
-        "Content-Type: text/html\r\n"
+        "Content-Type: text/plain\r\n"
         "Connection: close\r\n"
         "\r\n"
-        "%s\r\n",
+        "%s",
         data);
-        // "<html><head><title>VPCS Virtual HTTP Server</title></head>"
-        // "<body><h1>VPCS Virtual HTTP Server - PC%d:%d</h1>"
-        // "<h2>Your Request Headers:</h2>"
-        // "<pre>%s</pre>"
-        // "</body></html>",
-        // pcid + 1, port, data);
 
-    printf("VPCS HTTP server PC%d:%d - served request (%d bytes response)\n", 
-           pcid + 1, port, *response_len);
+    printf("VPCS HTTP server port %d - served request (%d bytes response)\n", 
+           port, *response_len);
 }
 
 /* HTTP client implementation using VPCS virtual TCP stack */
