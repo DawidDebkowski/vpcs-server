@@ -92,12 +92,19 @@ int httpd_status(void)
 // hook in the tcp protocol to handle httpd data if a server is present at the given ip+port
 void httpd_handle_request(int port, const char *data, int data_len, char *response, int *response_len)
 {
-    int i;
+    if (data_len >= 4 && 
+        !(strncmp(data, "GET ", 4) == 0 ||
+         strncmp(data, "POST", 4) == 0 ||
+         strncmp(data, "HEAD", 4) == 0 ||
+         strncmp(data, "PUT ", 4) == 0)) {
+        printf("VPCS HTTP server port %d - received request (%d bytes) and its not http data\n", port, data_len);
+        response_len = 0;
+        return;
+    }
     
-    printf("VPCS HTTP server port %d - received request (%d bytes):\n", 
-           port, data_len);
+    printf("VPCS HTTP server port %d - received request (%d bytes):\n", port, data_len);
     printf("--- Start of received data ---\n");
-    for (i = 0; i < data_len && i < 512; i++) {
+    for (int i = 0; i < data_len && i < 512; i++) {
         if (data[i] >= 32 && data[i] <= 126) {
             printf("%c", data[i]);
         } else if (data[i] == '\r') {
@@ -112,20 +119,6 @@ void httpd_handle_request(int port, const char *data, int data_len, char *respon
         printf("\n... (%d more bytes truncated)", data_len - 512);
     }
     printf("\n--- End of received data ---\n");
-    
-    /* Check if we have ANY server on this port (TCP stack already routed to correct PC) */
-    int server_found = 0;
-    for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
-        if (httpd_servers[i].enabled && httpd_servers[i].port == port) {
-            server_found = 1;
-            break;
-        }
-    }
-    
-    if (!server_found) {
-        *response_len = 0;
-        return;
-    }
     
     /* Generate HTTP response with echo */
     *response_len = snprintf(response, HTTPD_MAX_RESPONSE_SIZE,

@@ -727,76 +727,82 @@ struct packet *tcpReply(struct packet *m0, sesscb *cb)
 		int dest_port = ntohs(orig_th->th_dport);
 		char *http_data = (char *)orig_th + (orig_th->th_off << 2);
 		
-		// printf("DEBUG: Received HTTP data on port %d, size: %d\n", dest_port, orig_dsize);
-		
-		/* Check if we have HTTP server on this port */
 		char response_buffer[HTTPD_MAX_RESPONSE_SIZE];
 		int response_len = 0;
 		
-		httpd_handle_request(dest_port, http_data, orig_dsize, response_buffer, &response_len);
-		
-		if (response_len > 0) {
-			// printf("DEBUG: Generated HTTP response, size: %d\n", response_len);
-			/* Create HTTP response packet */
-			len = sizeof(ethdr) + sizeof(iphdr) + sizeof(tcphdr) + response_len;
-			m = new_pkt(len);
-			if (m == NULL)
-				return NULL;
-			
-			memcpy(m->data, m0->data, sizeof(ethdr) + sizeof(iphdr) + sizeof(tcphdr));
-			
-			eh = (ethdr *)(m->data);
-			ip = (iphdr *)(eh + 1);
-			ti = (tcpiphdr *)ip;
-			th = (tcphdr *)(ip + 1);
-			
-			/* Copy HTTP response data */
-			memcpy((char *)th + sizeof(tcphdr), response_buffer, response_len);
-			
-			tcplen = ntohs(orig_ip->len) - sizeof(iphdr);
-			ip->len = htons(len - sizeof(ethdr));
-			
-			ip->dip ^= ip->sip;
-			ip->sip ^= ip->dip;
-			ip->dip ^= ip->sip;
-			ip->ttl = TTL;
-			
-			/* Set data size for tcpReplyPacket */
-			cb->dsize = response_len;
-			
-			int rt = tcpReplyPacket(th, cb, tcplen);
-			if (rt == 0) {
-				// printf("DEBUG: tcpReplyPacket failed for HTTP response\n");
-				del_pkt(m);
-				return NULL;
+		/* Check if we have ANY server on this port (TCP stack already routed to correct PC) */
+		int server_found = 0;
+		for (int i = 0; i < HTTPD_MAX_SERVERS; i++) {
+			if (httpd_servers[i].enabled && httpd_servers[i].port == dest_port) {
+				server_found = 1;
+				break;
 			}
+		}
+		
+		if(server_found) {
+			httpd_handle_request(dest_port, http_data, orig_dsize, response_buffer, &response_len);
 			
-			// printf("DEBUG: HTTP response packet created successfully\n");
-			
-			/* Update TCP header data size */
-			ti->ti_len = htons(len - sizeof(iphdr));
-			
-			bcopy(((struct ipovly *)ip)->ih_x1, b, 9);
-			bzero(((struct ipovly *)ip)->ih_x1, 9);
-			
-			ti->ti_sum = 0;
-			ti->ti_sum = cksum((unsigned short *)ti, len - sizeof(ethdr));
-			bcopy(b, ((struct ipovly *)ip)->ih_x1, 9);
-
-			ip->cksum = 0;
-			ip->cksum = cksum((unsigned short *)ip, sizeof(iphdr));
-			
-			swap_ehead(m->data);
-			
-			/* save the status, ACK for TH_FIN of client was sent 
-			 * so send FIN on the next time
-			 */
-			if (rt == 2)
-				cb->flags = (TH_ACK | TH_FIN);
+			if (response_len > 0) {
+				// printf("DEBUG: Generated HTTP response, size: %d\n", response_len);
+				/* Create HTTP response packet */
+				len = sizeof(ethdr) + sizeof(iphdr) + sizeof(tcphdr) + response_len;
+				m = new_pkt(len);
+				if (m == NULL)
+					return NULL;
 				
-			return m;
-		} else {
-			// printf("DEBUG: No HTTP response generated\n");
+				memcpy(m->data, m0->data, sizeof(ethdr) + sizeof(iphdr) + sizeof(tcphdr));
+				
+				eh = (ethdr *)(m->data);
+				ip = (iphdr *)(eh + 1);
+				ti = (tcpiphdr *)ip;
+				th = (tcphdr *)(ip + 1);
+				
+				/* Copy HTTP response data */
+				memcpy((char *)th + sizeof(tcphdr), response_buffer, response_len);
+				
+				tcplen = ntohs(orig_ip->len) - sizeof(iphdr);
+				ip->len = htons(len - sizeof(ethdr));
+				
+				ip->dip ^= ip->sip;
+				ip->sip ^= ip->dip;
+				ip->dip ^= ip->sip;
+				ip->ttl = TTL;
+				
+				/* Set data size for tcpReplyPacket */
+				cb->dsize = response_len;
+				
+				int rt = tcpReplyPacket(th, cb, tcplen);
+				if (rt == 0) {
+					// printf("DEBUG: tcpReplyPacket failed for HTTP response\n");
+					del_pkt(m);
+					return NULL;
+				}
+				
+				// printf("DEBUG: HTTP response packet created successfully\n");
+				
+				/* Update TCP header data size */
+				ti->ti_len = htons(len - sizeof(iphdr));
+				
+				bcopy(((struct ipovly *)ip)->ih_x1, b, 9);
+				bzero(((struct ipovly *)ip)->ih_x1, 9);
+				
+				ti->ti_sum = 0;
+				ti->ti_sum = cksum((unsigned short *)ti, len - sizeof(ethdr));
+				bcopy(b, ((struct ipovly *)ip)->ih_x1, 9);
+
+				ip->cksum = 0;
+				ip->cksum = cksum((unsigned short *)ip, sizeof(iphdr));
+				
+				swap_ehead(m->data);
+				
+				/* save the status, ACK for TH_FIN of client was sent 
+				* so send FIN on the next time
+				*/
+				if (rt == 2)
+					cb->flags = (TH_ACK | TH_FIN);
+					
+				return m;
+			}
 		}
 	} else {
 		// printf("DEBUG: Not HTTP data packet - flags: 0x%02x, dsize: %d\n", orig_th->th_flags, orig_dsize);
