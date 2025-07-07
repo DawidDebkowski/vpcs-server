@@ -87,9 +87,3 @@ case ${os} in
     	echo "Not support: ${os}"
     	;;
 esac
-
-if [ "$MKOPT" != "clean" ]; then
-    if [ -f ./vpcs ]; then
-        cp ./vpcs /usr/bin/vpcs
-    fi
-fi
