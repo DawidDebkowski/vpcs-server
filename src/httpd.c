@@ -46,9 +46,11 @@ httpd_server_t httpd_servers[HTTPD_MAX_SERVERS] = {0};
 
 /* VPCS Virtual HTTP Server Implementation */
 
+/*
+    Start a server on the desired port.
+*/
 int httpd_start(int port)
 {
-    extern int pcid; // moge usunac pcid bo kazdy pc ma unikalne ip
     int i;
     
     /* Check if server already running on this port */
@@ -64,9 +66,8 @@ int httpd_start(int port)
         if (!httpd_servers[i].enabled) {
             httpd_servers[i].enabled = 1;
             httpd_servers[i].port = port;
-            httpd_servers[i].pc_id = pcid;
             
-            printf("VPCS HTTP server started on PC%d port %d\n", pcid + 1, port);
+            printf("VPCS HTTP server started on port %d\n", port);
             printf("Server will echo back incoming HTTP request headers\n");
             return 1;
         }
@@ -101,8 +102,7 @@ int httpd_status(void)
     
     for (i = 0; i < HTTPD_MAX_SERVERS; i++) {
         if (httpd_servers[i].enabled) {
-            printf("  PC%d: Port %d - Running\n", 
-                   httpd_servers[i].pc_id + 1, 
+            printf("  Port %d - Running\n", 
                    httpd_servers[i].port);
             count++;
         }
