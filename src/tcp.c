@@ -1,4 +1,8 @@
 /*
+ * HTTP Server/Client Extension:
+ * Copyright (c) 2025, Dawid Dębkowski
+ * 
+ * Original VPCS
  * Copyright (c) 2007-2015, Paul Meng (mirnshi@gmail.com)
  * All rights reserved.
  *
